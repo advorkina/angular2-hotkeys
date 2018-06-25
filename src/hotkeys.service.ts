@@ -6,7 +6,8 @@ import "mousetrap";
 
 @Injectable()
 export class HotkeysService {
-  hotkeys: Hotkey[] = [];
+  hotkeysPerCombo: { [id: string]: Hotkey[] } = {};
+
   pausedHotkeys: Hotkey[] = [];
   mousetrap: MousetrapInstance;
   cheatSheetToggle: Subject<any> = new Subject();
@@ -56,48 +57,51 @@ export class HotkeysService {
 
   add(hotkey: Hotkey | Hotkey[], specificEvent?: string): Hotkey | Hotkey[] {
     if (Array.isArray(hotkey)) {
-      let temp: Hotkey[] = [];
-      for (let key of hotkey) {
-        temp.push(<Hotkey>this.add(key, specificEvent));
-      }
-      return temp;
+      return this.addMultipleHotkeys(hotkey, specificEvent);
     }
-    this.remove(hotkey);
-    this.hotkeys.push(<Hotkey>hotkey);
-    this.mousetrap.bind(
-      (<Hotkey>hotkey).combo,
-      this.hotkeyCallback(hotkey),
-      specificEvent
-    );
-    return hotkey;
+
+    return this.addSingleHotkey(hotkey, specificEvent);
   }
 
   remove(hotkey?: Hotkey | Hotkey[]): Hotkey | Hotkey[] {
     let temp: Hotkey[] = [];
     if (!hotkey) {
-      for (let key of this.hotkeys) {
-        temp.push(<Hotkey>this.remove(key));
+      for (let combo in this.hotkeysPerCombo) {
+        this.hotkeysPerCombo[combo].forEach((hotkey: Hotkey) =>
+          temp.push(<Hotkey>this.remove(hotkey))
+        );
       }
       return temp;
     }
     if (Array.isArray(hotkey)) {
       for (let key of hotkey) {
-        temp.push(<Hotkey>this.remove(key));
+        this.hotkeysPerCombo[this.getHotkeyGroupId(key)].forEach(
+          (hotkey: Hotkey) => temp.push(<Hotkey>this.remove(hotkey))
+        );
       }
       return temp;
     }
-    let index = this.findHotkey(<Hotkey>hotkey);
-    if (index > -1) {
-      this.hotkeys.splice(index, 1);
-      this.mousetrap.unbind((<Hotkey>hotkey).combo);
-      return hotkey;
+
+    let hotkeyId: string = this.getHotkeyGroupId(hotkey);
+    let hotkeysGroup: Hotkey[] = this.hotkeysPerCombo[hotkeyId];
+    if (!hotkeysGroup) {
+      return null;
     }
-    return null;
+
+    delete this.hotkeysPerCombo[hotkeyId];
+    this.mousetrap.unbind((<Hotkey>hotkey).combo);
+    return hotkey;
   }
 
   get(combo?: string | string[]): Hotkey | Hotkey[] {
     if (!combo) {
-      return this.hotkeys;
+      let temp: Hotkey[] = [];
+      for (let combo in this.hotkeysPerCombo) {
+        this.hotkeysPerCombo[combo].forEach((hotkey: Hotkey) =>
+          temp.push(hotkey)
+        );
+      }
+      return temp;
     }
     if (Array.isArray(combo)) {
       let temp: Hotkey[] = [];
@@ -106,17 +110,19 @@ export class HotkeysService {
       }
       return temp;
     }
-    for (let i = 0; i < this.hotkeys.length; i++) {
-      if (this.hotkeys[i].combo.indexOf(<string>combo) > -1) {
-        return this.hotkeys[i];
-      }
-    }
-    return null;
+
+    return this.hotkeysPerCombo[JSON.stringify(combo)];
   }
 
   pause(hotkey?: Hotkey | Hotkey[]): Hotkey | Hotkey[] {
     if (!hotkey) {
-      return this.pause(this.hotkeys);
+      let temp: Hotkey[] = [];
+      for (let combo in this.hotkeysPerCombo) {
+        this.hotkeysPerCombo[combo].forEach((hotkey: Hotkey) =>
+          temp.push(<Hotkey>this.remove(hotkey))
+        );
+      }
+      return temp;
     }
     if (Array.isArray(hotkey)) {
       let temp: Hotkey[] = [];
@@ -153,9 +159,41 @@ export class HotkeysService {
     this.mousetrap.reset();
   }
 
-  private hotkeyCallback: (hotkey: Hotkey | Hotkey[]) => any = (
-    hotkey: Hotkey | Hotkey[]
+  private addMultipleHotkeys(
+    hotkey: Hotkey[],
+    specificEvent?: string
+  ): Hotkey[] {
+    let temp: Hotkey[] = [];
+    for (let key of hotkey) {
+      temp.push(<Hotkey>this.add(key, specificEvent));
+    }
+    return temp;
+  }
+
+  private addSingleHotkey(hotkey: Hotkey, specificEvent?: string) {
+    this.createOrAddToHotkeyToGroup(hotkey);
+    this.mousetrap.bind(
+      hotkey.combo,
+      this.hotkeyGroupCallback(
+        this.hotkeysPerCombo[this.getHotkeyGroupId(hotkey)]
+      ),
+      specificEvent
+    );
+
+    return hotkey;
+  }
+
+  private hotkeyGroupCallback: (hotkeys: Hotkey[]) => any = (
+    hotkeys: Hotkey[]
   ): any => {
+    return (event: KeyboardEvent, combo: string) => {
+      hotkeys.forEach((hotkey: Hotkey) =>
+        this.hotkeyCallback(hotkey)(event, combo)
+      );
+    };
+  };
+
+  private hotkeyCallback: (hotkey: Hotkey) => any = (hotkey: Hotkey): any => {
     return (event: KeyboardEvent, combo: string) => {
       let shouldExecute = true;
 
@@ -172,9 +210,8 @@ export class HotkeysService {
           shouldExecute = true;
         } else if (
           this._preventIn.indexOf(nodeName) > -1 &&
-          (<Hotkey>hotkey).allowIn
-            .map(allow => allow.toUpperCase())
-            .indexOf(nodeName) === -1
+          hotkey.allowIn.map(allow => allow.toUpperCase()).indexOf(nodeName) ===
+            -1
         ) {
           // don't execute callback if the event was fired from inside an element listed in preventIn but not in allowIn
           shouldExecute = false;
@@ -182,12 +219,27 @@ export class HotkeysService {
       }
 
       if (shouldExecute) {
-        return (<Hotkey>hotkey).callback.apply(this, [event, combo]);
+        return hotkey.callback.apply(this, [event, combo]);
       }
     };
   };
 
-  private findHotkey(hotkey: Hotkey): number {
-    return this.hotkeys.indexOf(hotkey);
+  private createOrAddToHotkeyToGroup(hotkey: Hotkey): void {
+    let hotkeyGroupId: string = this.getHotkeyGroupId(hotkey);
+    let hotkeyGroupPerCombo: Hotkey[] = this.getHotkeyGroup(hotkeyGroupId);
+
+    if (hotkeyGroupPerCombo) {
+      this.hotkeysPerCombo[hotkeyGroupId] = hotkeyGroupPerCombo.concat(hotkey);
+    } else {
+      this.hotkeysPerCombo[hotkeyGroupId] = [hotkey];
+    }
+  }
+
+  private getHotkeyGroup(hotkeyId: string): Hotkey[] {
+    return this.hotkeysPerCombo[hotkeyId];
+  }
+
+  private getHotkeyGroupId(hotkey: Hotkey): string {
+    return JSON.stringify(hotkey.combo);
   }
 }
