@@ -1,8 +1,8 @@
-import { HotkeyOptions, IHotkeyOptions } from "./hotkey.options";
-import { Subject } from "rxjs";
-import { Inject, Injectable } from "@angular/core";
-import { Hotkey } from "./hotkey.model";
-import "mousetrap";
+import { HotkeyOptions, IHotkeyOptions } from './hotkey.options';
+import { Subject } from 'rxjs';
+import { Inject, Injectable } from '@angular/core';
+import { Hotkey } from './hotkey.model';
+import 'mousetrap';
 
 @Injectable()
 export class HotkeysService {
@@ -12,7 +12,7 @@ export class HotkeysService {
   mousetrap: MousetrapInstance;
   cheatSheetToggle: Subject<any> = new Subject();
 
-  private _preventIn = ["INPUT", "SELECT", "TEXTAREA"];
+  private _preventIn = ['INPUT', 'SELECT', 'TEXTAREA'];
 
   constructor(@Inject(HotkeyOptions) private options: IHotkeyOptions) {
     Mousetrap.prototype.stopCallback = (
@@ -22,21 +22,21 @@ export class HotkeysService {
       callback: Function
     ) => {
       // if the element has the class "mousetrap" then no need to stop
-      if ((" " + element.className + " ").indexOf(" mousetrap ") > -1) {
+      if ((' ' + element.className + ' ').indexOf(' mousetrap ') > -1) {
         return false;
       }
-      return element.contentEditable && element.contentEditable === "true";
+      return element.contentEditable && element.contentEditable === 'true';
     };
     this.mousetrap = new (<any>Mousetrap)();
     if (!this.options.disableCheatSheet) {
       this.add(
         new Hotkey(
-          this.options.cheatSheetHotkey || "?",
+          this.options.cheatSheetHotkey || '?',
           function(event: KeyboardEvent) {
             this.cheatSheetToggle.next();
           }.bind(this),
           [],
-          this.options.cheatSheetDescription || "Show / hide this help menu"
+          this.options.cheatSheetDescription || 'Show / hide this help menu'
         )
       );
     }
@@ -44,12 +44,12 @@ export class HotkeysService {
     if (this.options.cheatSheetCloseEsc) {
       this.add(
         new Hotkey(
-          "esc",
+          'esc',
           function(event: KeyboardEvent) {
             this.cheatSheetToggle.next(false);
           }.bind(this),
-          ["HOTKEYS-CHEATSHEET"],
-          this.options.cheatSheetCloseEscDescription || "Hide this help menu"
+          ['HOTKEYS-CHEATSHEET'],
+          this.options.cheatSheetCloseEscDescription || 'Hide this help menu'
         )
       );
     }
@@ -206,7 +206,7 @@ export class HotkeysService {
         let nodeName: string = target.nodeName.toUpperCase();
 
         // check if the input has a mousetrap class, and skip checking preventIn if so
-        if ((" " + target.className + " ").indexOf(" mousetrap ") > -1) {
+        if ((' ' + target.className + ' ').indexOf(' mousetrap ') > -1) {
           shouldExecute = true;
         } else if (
           this._preventIn.indexOf(nodeName) > -1 &&

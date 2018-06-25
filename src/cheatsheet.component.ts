@@ -1,10 +1,10 @@
-import { Component, OnInit, OnDestroy, Input } from "@angular/core";
-import { Subscription } from "rxjs";
-import { HotkeysService } from "./hotkeys.service";
-import { Hotkey } from "./hotkey.model";
+import { Component, OnInit, OnDestroy, Input } from '@angular/core';
+import { Subscription } from 'rxjs';
+import { HotkeysService } from './hotkeys.service';
+import { Hotkey } from './hotkey.model';
 
 @Component({
-  selector: "hotkeys-cheatsheet",
+  selector: 'hotkeys-cheatsheet',
   styles: [
     `
       .cfp-hotkeys-container {
@@ -128,7 +128,7 @@ import { Hotkey } from "./hotkey.model";
 })
 export class CheatSheetComponent implements OnInit, OnDestroy {
   helpVisible = false;
-  @Input() title: string = "Keyboard Shortcuts:";
+  @Input() title: string = 'Keyboard Shortcuts:';
   subscription: Subscription;
 
   hotkeys: Hotkey[];
